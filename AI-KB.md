@@ -300,6 +300,8 @@ PYTHONIOENCODING=utf-8 python bot.py   # ⚠️ ตั้ง UTF-8 ไม่ง�
 - ไฟล์ใหม่: `Dockerfile` (default SQLite ใน `/data`), `docker-compose.yml` (bot+Postgres),
   `.dockerignore` · `requirements.txt` + `aiosqlite`
 - ⚠️ ยังไม่ได้ verify บนเครื่องนี้: `docker build` + ต่อ Postgres จริง (Docker daemon ไม่ได้รัน)
+- Koyeb free: ใช้ Worker ไม่ได้ → `bot.py` มี `/healthz` (bind `$PORT`, default 8000) ให้ deploy
+  เป็น Web + health check path `/healthz` + เอา cron-job.org ping ทุก 30 นาทีกัน sleep
 
 ---
 
