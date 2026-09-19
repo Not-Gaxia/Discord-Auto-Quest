@@ -18,6 +18,7 @@ import random
 import time
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 # โหลด .env ก่อน import อื่นที่อ่าน env (db.py อ่าน DATABASE_URL/ENCRYPTION_KEY)
 try:
@@ -27,6 +28,7 @@ except Exception:
     pass
 
 import aiohttp
+from aiohttp import web
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -60,11 +62,13 @@ class QuestBot(commands.Bot):
         self.game_workers: dict[int, asyncio.Task] = {}             # เกม (ต่อ account)
         self.farm_state: dict[int, dict] = {}                       # สถานะสด: {current, queue}
         self._pres_i = 0                                            # index สลับสถานะ
+        self._health_runner: web.AppRunner | None = None    # /healthz ให้โฮสต์เช็ค + กัน sleep
 
     async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
         await db.connect()
-        log.info("✓ database connected")
+        log.info(f"✓ database connected ({db.mode})")
+        await start_health_server(self)   # bind $PORT ก่อน sync command (โฮสต์อย่าง Koyeb เช็คตรงนี้)
         global PRESENCE
         if ENABLE_PRESENCE:
             PRESENCE = PresenceManager(self.session)
@@ -83,6 +87,9 @@ class QuestBot(commands.Bot):
     async def close(self) -> None:
         for t in (*self.farm_tasks.values(), *self.game_workers.values()):
             t.cancel()
+        if self._health_runner is not None:
+            await self._health_runner.cleanup()
+            self._health_runner = None
         if PRESENCE:
             await PRESENCE.close()
         if self.session:
@@ -210,7 +217,7 @@ async def build_completion_embed(uid: int) -> discord.Embed:
         e.description = "ยังไม่มีเควสเสร็จ"
         return e
     e.description = "\n".join(
-        f"✅ **{r['quest_name']}** · `{r['username']}` · <t:{int(r['completed_at'].timestamp())}:R>"
+        f"✅ **{r['quest_name']}** · `{r['username']}` · <t:{_ts(r['completed_at'])}:R>"
         for r in rows)
     e.set_footer(text=f"รวมทั้งหมด {total} เควส • อัปเดตล่าสุด")
     return e
@@ -319,6 +326,48 @@ def farming_count() -> int:
 def _progbar(pct: int, width: int = 10) -> str:
     filled = max(0, min(width, round(width * pct / 100)))
     return "█" * filled + "░" * (width - filled)
+
+
+def create_health_app() -> web.Application:
+    """แอปเล็กๆ ให้โฮสต์ (Koyeb/Render/Fly) health-check + ให้ตัว ping เลี้ยงกัน sleep"""
+    async def healthz(_req: web.Request) -> web.Response:
+        return web.Response(text="ok")
+    app = web.Application()
+    app.router.add_get("/healthz", healthz)
+    return app
+
+
+async def start_health_server(bot: QuestBot) -> int:
+    """bind 0.0.0.0:$PORT (Koyeb ใส่ PORT ให้เอง, default 8000) → คืน port ที่ bind ได้"""
+    port = int(os.getenv("PORT", "8000") or 8000)
+    bot._health_runner = web.AppRunner(create_health_app())
+    await bot._health_runner.setup()
+    await web.TCPSite(bot._health_runner, "0.0.0.0", port).start()
+    log.info(f"✓ health server :{port}/healthz")
+    return port
+
+
+def _ts(v) -> int:
+    """completed_at เป็น datetime (Postgres) หรือ str (SQLite) → epoch วินาที"""
+    if v is None:
+        return 0
+    if isinstance(v, (int, float)):
+        return int(v)
+    if hasattr(v, "timestamp"):
+        try:
+            return int(v.timestamp())
+        except Exception:
+            return 0
+    s = str(v).strip()
+    try:
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    except Exception:
+        return 0
 
 
 def _vids_running(account_id: int) -> int:
@@ -584,7 +633,8 @@ async def on_ready():
 
 
 if __name__ == "__main__":
-    missing = [k for k in ("DISCORD_BOT_TOKEN", "DATABASE_URL", "ENCRYPTION_KEY")
+    # DATABASE_URL ไม่บังคับ — ไม่ตั้ง = SQLite ไฟล์ questbot.db (local/โฮสต์เล็ก)
+    missing = [k for k in ("DISCORD_BOT_TOKEN", "ENCRYPTION_KEY")
                if not os.getenv(k)]
     if missing:
         raise SystemExit(f"ต้องตั้ง ENV ก่อน: {', '.join(missing)}")

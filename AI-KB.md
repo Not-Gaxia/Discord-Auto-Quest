@@ -291,6 +291,18 @@ PYTHONIOENCODING=utf-8 python bot.py   # ⚠️ ตั้ง UTF-8 ไม่ง�
 
 ---
 
+## 17. Multi-host + local (2026-09-18)
+
+- `db.py` เลือก backend จาก `DATABASE_URL` อัตโนมัติ: `postgresql://` → asyncpg /
+  ว่าง/`sqlite:` → SQLite (`SQLITE_PATH` หรือ `questbot.db`) — query เขียนแบบ `$n` แล้วแปลเป็น `?`
+- upsert ใช้ `excluded.` (ได้ทั้ง 2 backend) — อย่าใช้ `$n` ซ้ำตำแหน่งเดิมใน query เดียว
+- `bot.py`: `DATABASE_URL` ไม่บังคับแล้ว + `_ts()` รับ `completed_at` ได้ทั้ง datetime/str
+- ไฟล์ใหม่: `Dockerfile` (default SQLite ใน `/data`), `docker-compose.yml` (bot+Postgres),
+  `.dockerignore` · `requirements.txt` + `aiosqlite`
+- ⚠️ ยังไม่ได้ verify บนเครื่องนี้: `docker build` + ต่อ Postgres จริง (Docker daemon ไม่ได้รัน)
+
+---
+
 ## 16. งานต่อไป / ไอเดีย
 
 - [x] ~~Deploy Railway + Postgres~~ — เสร็จแล้ว

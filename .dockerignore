@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+.git/
+AI-KB.md
+*.log
+*.db
+*.db-wal
+*.db-shm

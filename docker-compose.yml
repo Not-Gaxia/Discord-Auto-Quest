@@ -1,0 +1,36 @@
+# Local / VPS แบบครบชุด: บอท + Postgres
+# ใช้:  copy .env.example .env  (แก้ค่า) → docker compose up -d --build
+#
+# ถ้าอยากได้แบบเบาสุด (ไม่เอา Postgres): รันแค่
+#   docker build -t questbot . && docker run -d --env-file .env -v questbot-data:/data questbot
+# บอทจะใช้ SQLite ใน /data อัตโนมัติ
+
+services:
+  bot:
+    build: .
+    env_file:
+      - path: .env
+        required: false   # ไม่มี .env ก็รันได้ (ใช้ defaults) — แต่ต้องมี DISCORD_BOT_TOKEN+ENCRYPTION_KEY ไม่งั้นบอทจบพร้อมข้อความบอก
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-questbot}@db:5432/${POSTGRES_DB:-questbot}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-questbot}
+      POSTGRES_DB: ${POSTGRES_DB:-questbot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -41,19 +41,56 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 ```
 > เปลี่ยน key เมื่อไหร่ = decrypt token เก่าทั้งหมดไม่ได้ ทุกคนต้องลงทะเบียนใหม่
 
-### 4. รัน local (ทดสอบ)
-ต้องมี Postgres — รันผ่าน Docker ง่ายสุด:
-```bash
-docker run -d --name questbot-pg -e POSTGRES_PASSWORD=questbot \
-  -e POSTGRES_DB=questbot -p 5432:5432 postgres:16
+### 4. รัน local (เลือก 1 วิธี)
 
+**วิธี A — เบาสุด ไม่ต้องมี Postgres (SQLite):**
+```bash
 pip install -r requirements.txt
-copy .env.example .env          # แก้ค่าใน .env (DATABASE_URL ชี้ container ข้างบน)
-python bot.py
+copy .env.example .env          # แก้ DISCORD_BOT_TOKEN / OWNER_ID / ENCRYPTION_KEY
+python bot.py                   # ไม่ตั้ง DATABASE_URL = ใช้ไฟล์ questbot.db อัตโนมัติ
 ```
 ใน Discord: พิมพ์ `/setup_panel` ในห้องที่อยาก → ปักหมุดแผง → กดปุ่มทดสอบ
 
-### 5. Deploy Railway
+**วิธี B — Docker (บอท + Postgres):**
+```bash
+copy .env.example .env          # แก้ค่า + ตั้ง POSTGRES_PASSWORD
+docker compose up -d --build
+docker compose logs -f bot
+```
+
+### 5. Deploy โฮสต์อื่น (ที่ไม่ใช่ Railway)
+
+บอทเป็น **worker** ไม่ต้อง expose port — โฮสต์ไหนรัน Docker ได้ก็รันได้:
+
+| โฮสต์ | วิธี |
+|---|---|
+| **Koyeb (ฟรี ไม่ต้องมีบัตร)** | ดูขั้นตอน Koyeb ด้านล่าง — deploy เป็น **Web service** (ฟรีใช้ Worker ไม่ได้) + Koyeb Postgres ฟรี |
+| Render / Fly.io | New service → **Deploy from GitHub** → เลือก repo นี้ (มันเจอ `Dockerfile` เอง) → ใส่ env `DISCORD_BOT_TOKEN`, `OWNER_ID`, `ENCRYPTION_KEY` (ไม่ต้องมี DB — ใช้ SQLite ใน disk/volume ของโฮสต์) |
+| VPS (Ubuntu/Debian) | `git clone` → `cp .env.example .env` (แก้ค่า) → `docker compose up -d --build` (ได้ Postgres ด้วย) |
+| อยากได้ Postgres บน Render/Fly | add managed Postgres ของโฮสต์นั้น → ก๊อป connection string มาใส่ `DATABASE_URL` → บอทสลับไปใช้ Postgres เอง |
+
+> ย้ายเครื่อง/ย้าย DB ทีหลังได้ — แต่ `ENCRYPTION_KEY` ต้องเป็นค่าเดิมเสมอ ไม่งั้นถอด token เก่าไม่ได้
+
+### 5.1 Deploy Koyeb ฟรี (ไม่ต้องมีบัตร)
+
+เงื่อนไขฟรีที่ต้องรู้: ใช้ได้แค่ **Web service** (Worker ไม่ได้) + **sleep ถ้าไม่มี traffic 1 ชม.**
+บอทนี้เตรียมไว้แล้ว (`/healthz` + ใช้ Postgres) — ทำตามนี้:
+
+1. push repo นี้ขึ้น GitHub
+2. สมัคร https://koyeb.com (ด้วย GitHub — ไม่ต้องมีบัตร) → **Create Service → GitHub** → เลือก repo
+   - Builder: **Dockerfile** · Instance: **Free** · Region: Frankfurt หรือ Washington
+   - Service type: **Web** · Port: `8000` · Health check path: `/healthz`
+3. แท็บ **Database → Create Postgres (Free)** → ก๊อป connection string
+4. แท็บ **Environment** ของ service ใส่:
+   `DISCORD_BOT_TOKEN` · `OWNER_ID` · `ENCRYPTION_KEY` · `DATABASE_URL` (จากข้อ 3)
+   (`PORT` Koyeb ใส่ให้เอง — ไม่ต้องตั้ง)
+5. Deploy → เปิด `https://<ชื่อ>.koyeb.app/healthz` เห็น `ok` = รอด → ไป `/setup_panel`
+6. **กัน sleep:** สมัคร https://cron-job.org (ฟรี) → สร้าง job ping
+   `https://<ชื่อ>.koyeb.app/healthz` ทุก **30 นาที** → service จะไม่ scale-to-zero
+
+> Koyeb Postgres ฟรีเองก็ sleep ตอนเงียบ 5 นาที — ไม่เป็นไร มันตื่นเองเมื่อบอทต่อเข้าไป
+
+### 6. Deploy Railway (เหมือนเดิม)
 1. push โฟลเดอร์นี้ขึ้น GitHub
 2. https://railway.app → **New Project → Deploy from GitHub repo**
 3. ในโปรเจกต์เดียวกัน กด **+ New → Database → Add PostgreSQL**
@@ -61,8 +98,6 @@ python bot.py
 4. แท็บ **Variables** ของ service บอท → ใส่ `DISCORD_BOT_TOKEN`, `OWNER_ID`,
    `ENCRYPTION_KEY`, (`GUILD_ID`)
 5. Deploy → ไปที่ server → `/setup_panel`
-
-> บอทเป็น **worker** ไม่ต้อง expose port
 
 ---
 
