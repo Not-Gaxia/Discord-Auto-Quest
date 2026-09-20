@@ -66,9 +66,11 @@ class QuestBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
+        # health server ก่อนอย่างอื่น — โฮสต์ (Render/Koyeb) health-check ตั้งแต่ deploy
+        # ถ้า DB ช้า/พัง บอทจะล่ม แต่ port ต้องตอบก่อนเสมอ
+        await start_health_server(self)
         await db.connect()
         log.info(f"✓ database connected ({db.mode})")
-        await start_health_server(self)   # bind $PORT ก่อน sync command (โฮสต์อย่าง Koyeb เช็คตรงนี้)
         global PRESENCE
         if ENABLE_PRESENCE:
             PRESENCE = PresenceManager(self.session)

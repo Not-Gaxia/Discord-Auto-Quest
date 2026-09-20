@@ -302,6 +302,10 @@ PYTHONIOENCODING=utf-8 python bot.py   # ⚠️ ตั้ง UTF-8 ไม่ง�
 - ⚠️ ยังไม่ได้ verify บนเครื่องนี้: `docker build` + ต่อ Postgres จริง (Docker daemon ไม่ได้รัน)
 - Koyeb free: ใช้ Worker ไม่ได้ → `bot.py` มี `/healthz` (bind `$PORT`, default 8000) ให้ deploy
   เป็น Web + health check path `/healthz` + เอา cron-job.org ping ทุก 30 นาทีกัน sleep
+- 2026-09-20: Koyeb พักให้บริการชั่วคราว → ย้ายเป้าหลักเป็น **Render free** (`render.yaml`
+  Blueprint เตรียมไว้) + Postgres ฟรีข้างนอก (Supabase/Neon — ของ Render หมดอายุ 90 วัน) +
+  cron-job.org ping `/healthz` ทุก 10 นาที (Render sleep ถ้าเงียบ 15 นาที)
+- `setup_hook` สตาร์ท health server ก่อน `db.connect()` — port ต้องตอบตั้งแต่ deploy
 
 ---
 

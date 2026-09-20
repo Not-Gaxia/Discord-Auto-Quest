@@ -1,0 +1,27 @@
+# Render Blueprint — Discord Quest Auto-Farmer (free tier)
+# ใช้: Dashboard → New → Blueprint → เลือก repo นี้ → Apply
+# Secrets (DISCORD_BOT_TOKEN / ENCRYPTION_KEY / DATABASE_URL / OWNER_ID) ใส่ใน dashboard
+# หมายเหตุ: Render free เป็น Web service ที่ sleep ถ้าเงียบ 15 นาที —
+#   ตั้ง cron-job.org ping https://<ชื่อ>.onrender.com/healthz ทุก 10 นาทีกัน sleep
+#   DB แนะนำ Postgres ฟรีข้างนอก (Supabase/Neon, ไม่หมดอายุ) เพราะของ Render หมดอายุ 90 วัน
+services:
+  - type: web
+    name: questbot
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: FARM_INTERVAL_MIN
+        value: "10"
+      - key: ENABLE_PRESENCE
+        value: "1"

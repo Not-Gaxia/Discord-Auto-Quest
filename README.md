@@ -64,14 +64,31 @@ docker compose logs -f bot
 
 | โฮสต์ | วิธี |
 |---|---|
-| **Koyeb (ฟรี ไม่ต้องมีบัตร)** | ดูขั้นตอน Koyeb ด้านล่าง — deploy เป็น **Web service** (ฟรีใช้ Worker ไม่ได้) + Koyeb Postgres ฟรี |
-| Render / Fly.io | New service → **Deploy from GitHub** → เลือก repo นี้ (มันเจอ `Dockerfile` เอง) → ใส่ env `DISCORD_BOT_TOKEN`, `OWNER_ID`, `ENCRYPTION_KEY` (ไม่ต้องมี DB — ใช้ SQLite ใน disk/volume ของโฮสต์) |
+| **Render (ฟรี ไม่ต้องมีบัตร)** | ดูขั้นตอน Render ด้านล่าง — Blueprint `render.yaml` เตรียมไว้แล้ว + Postgres ฟรีข้างนอก (Supabase/Neon) |
+| Koyeb (พักให้บริการชั่วคราว) | เดิมใช้ได้ ตอนนี้ปิดอยู่ — กลับมาเมื่อไหร่ดูข้อ 5.2 |
+| Fly.io | New service → **Deploy from GitHub** → เลือก repo นี้ (มันเจอ `Dockerfile` เอง) → ใส่ env `DISCORD_BOT_TOKEN`, `OWNER_ID`, `ENCRYPTION_KEY` + `DATABASE_URL` (Postgres ฟรีข้างนอก) |
 | VPS (Ubuntu/Debian) | `git clone` → `cp .env.example .env` (แก้ค่า) → `docker compose up -d --build` (ได้ Postgres ด้วย) |
 | อยากได้ Postgres บน Render/Fly | add managed Postgres ของโฮสต์นั้น → ก๊อป connection string มาใส่ `DATABASE_URL` → บอทสลับไปใช้ Postgres เอง |
 
 > ย้ายเครื่อง/ย้าย DB ทีหลังได้ — แต่ `ENCRYPTION_KEY` ต้องเป็นค่าเดิมเสมอ ไม่งั้นถอด token เก่าไม่ได้
 
-### 5.1 Deploy Koyeb ฟรี (ไม่ต้องมีบัตร)
+### 5.1 Deploy Render ฟรี (ไม่ต้องมีบัตร) — ทางหลักตอนนี้
+
+เงื่อนไขฟรีที่ต้องรู้: **Web service sleep ถ้าเงียบ 15 นาที** (Worker ฟรีไม่มี) +
+**Postgres ของ Render หมดอายุหลัง 90 วัน** — เลยใช้ DB ข้างนอกแทน:
+
+1. สมัคร https://supabase.com (หรือ neon.tech) → สร้าง Postgres ฟรี → ก๊อป connection string
+   (รูปแบบ `postgresql://...` — บอทสลับไปใช้เอง)
+2. push repo นี้ขึ้น GitHub
+3. สมัคร https://render.com (ด้วย GitHub — ไม่ต้องมีบัตร) →
+   **New → Blueprint** → เลือก repo → Apply (อ่าน `render.yaml` เอง: Web + Docker + `/healthz`)
+4. ใส่ env ใน dashboard: `DISCORD_BOT_TOKEN` · `OWNER_ID` · `ENCRYPTION_KEY` ·
+   `DATABASE_URL` (จากข้อ 1) — (`PORT` Render ใส่ให้เอง)
+5. Deploy → เปิด `https://<ชื่อ>.onrender.com/healthz` เห็น `ok` = รอด → ไป `/setup_panel`
+6. **กัน sleep (บังคับ):** สมัคร https://cron-job.org (ฟรี) → job ping
+   `https://<ชื่อ>.onrender.com/healthz` ทุก **10 นาที** (ต้องถี่กว่า 15 นาที)
+
+### 5.2 Koyeb (พักให้บริการชั่วคราว — 2026-09-20)
 
 เงื่อนไขฟรีที่ต้องรู้: ใช้ได้แค่ **Web service** (Worker ไม่ได้) + **sleep ถ้าไม่มี traffic 1 ชม.**
 บอทนี้เตรียมไว้แล้ว (`/healthz` + ใช้ Postgres) — ทำตามนี้:
